@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Crypto Ledger</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body id="body" class="min-h-screen bg-[#f3f6f2] transition-colors duration-500 font-sans">
+
+  <!-- Header -->
+  <header class="flex items-center justify-between px-6 py-4 shadow-md" style="background: linear-gradient(90deg,#556B2F,#8B5E3C)">
+    <div class="flex items-center gap-4">
+      <div class="w-12 h-12 rounded-lg bg-white/10 flex items-center justify-center text-white text-xl font-bold">CL</div>
+      <div>
+        <h1 class="text-white text-2xl font-bold">Crypto Ledger</h1>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <button id="theme-toggle" class="px-3 py-1 rounded bg-white/10 text-white hover:bg-white/20">Dark / Light</button>
+      <button id="tools-toggle" class="px-3 py-1 rounded bg-white/10 text-white hover:bg-white/20">⚙️ Tools</button>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    <!-- Left: Add Transaction -->
+    <section class="col-span-2 bg-white rounded-2xl shadow-lg p-6">
+      <div class="flex items-start justify-between mb-4">
+        <div>
+          <h2 class="text-2xl font-semibold text-[#3a4a2a]">Create Transaction</h2>
+          <p class="text-sm text-gray-500">Add a pending transaction. Delete any pending one before mining.</p>
+        </div>
+        <div class="text-sm text-gray-400">Project: Crypto Ledger</div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+        <input id="tx-from" placeholder="From (e.g. Bob)" class="border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-[#556B2F]" />
+        <input id="tx-to" placeholder="To (e.g. Mary)" class="border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-[#556B2F]" />
+        <input id="tx-amount" placeholder="Amount" type="number" class="border rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-[#556B2F]" />
+      </div>
+
+      <div class="flex gap-3 mb-6">
+        <button onclick="addTransaction()" class="px-4 py-2 rounded-lg bg-[#556B2F] text-white font-semibold hover:bg-[#425423]">Add Transaction</button>
+        <button onclick="clearPendingConfirm()" class="px-4 py-2 rounded-lg bg-[#8B5E3C] text-white font-semibold hover:bg-[#6f482f]">Clear Pending</button>
+      </div>
+
+      <!-- Pending transactions -->
+      <div>
+        <h3 class="text-lg font-medium mb-2 text-[#3a4a2a]">Pending Transactions</h3>
+        <ul id="tx-list" class="max-h-56 overflow-y-auto space-y-3"></ul>
+      </div>
+    </section>
+
+    <!-- Right: Blockchain display -->
+    <aside class="bg-white rounded-2xl shadow-lg p-6 flex flex-col gap-4 relative">
+      <div>
+        <h2 class="text-xl font-semibold text-[#3a4a2a]">Blockchain</h2>
+        <p class="text-sm text-gray-500">Mine pending transactions to add blocks. Access tools via ⚙️.</p>
+      </div>
+
+      <div id="progress-container" class="w-full bg-gray-200 h-3 rounded overflow-hidden hidden">
+        <div id="progress-bar" class="h-3 rounded bg-gradient-to-r from-[#9bbf7b] to-[#6b8f4a] w-0"></div>
+      </div>
+
+      <div>
+        <h3 class="font-medium text-[#3a4a2a] mb-2">Blocks (newest first)</h3>
+        <ul id="block-list" class="max-h-60 overflow-y-auto space-y-3"></ul>
+      </div>
+
+      <hr />
+      <div>
+        <h3 class="font-medium text-[#3a4a2a] mb-2">Wallet Balances</h3>
+        <ul id="wallets-list" class="max-h-60 overflow-y-auto space-y-2 pr-1"></ul>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="text-center py-4 text-sm text-gray-500">Crypto Ledger • Ann Maria • 2025</footer>
+
+  <!-- Slide-out Tools Sidebar -->
+  <div id="tools-panel" class="fixed top-0 right-0 h-full w-72 bg-white shadow-2xl transform translate-x-full transition-transform duration-300 flex flex-col p-6 z-50">
+    <div class="flex justify-between items-center mb-4">
+      <h3 class="text-lg font-semibold text-[#3a4a2a]">Tools</h3>
+      <button onclick="toggleTools()" class="text-gray-500 hover:text-gray-700">✖</button>
+    </div>
+
+    <div class="space-y-3">
+      <button onclick="mineBlock()" class="w-full py-2 rounded-lg font-semibold text-white bg-gradient-to-r from-[#7aa85c] to-[#5e8145] hover:opacity-90 shadow-md">Mine Block</button>
+      <button onclick="downloadLedgerJSON()" class="w-full py-2 rounded-lg font-semibold text-[#4a2a12] bg-gradient-to-r from-[#e7c8aa] to-[#d3b08a] hover:opacity-90 shadow-md">Download JSON</button>
+      <button onclick="validateBlockchain()" class="w-full py-2 rounded-lg font-semibold text-white bg-gradient-to-r from-[#e05a5a] to-[#a23a3a] hover:opacity-90 shadow-md">Validate Chain</button>
+    </div>
+  </div>
+
+  <!-- CryptoJS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+
+  <script>
+    let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+    let blockchain = JSON.parse(localStorage.getItem('blockchain')) || [];
+
+    function saveState() {
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+      localStorage.setItem('blockchain', JSON.stringify(blockchain));
+    }
+
+    function addTransaction() {
+      const from = document.getElementById('tx-from').value.trim();
+      const to = document.getElementById('tx-to').value.trim();
+      const amount = document.getElementById('tx-amount').value.trim();
+      if (!from || !to || !amount) return alert('Fill all fields!');
+      transactions.push({ from, to, amount: Number(amount) });
+      document.getElementById('tx-from').value = '';
+      document.getElementById('tx-to').value = '';
+      document.getElementById('tx-amount').value = '';
+      renderTransactions();
+      saveState();
+    }
+
+    function deletePending(i) {
+      if (!confirm('Delete this pending transaction?')) return;
+      transactions.splice(i, 1);
+      renderTransactions();
+      saveState();
+    }
+
+    function clearPendingConfirm() {
+      if (transactions.length === 0) return alert('No pending transactions.');
+      if (!confirm('Clear all pending?')) return;
+      transactions = [];
+      renderTransactions();
+      saveState();
+    }
+
+    function renderTransactions() {
+      const txList = document.getElementById('tx-list');
+      txList.innerHTML = '';
+      if (transactions.length === 0) {
+        txList.innerHTML = '<li class="text-gray-500">No transactions yet...</li>';
+        return;
+      }
+      transactions.forEach((tx, i) => {
+        const li = document.createElement('li');
+        li.className = 'bg-[#f7fbf6] border rounded-lg p-3 flex justify-between shadow-sm';
+        li.innerHTML = `
+          <div>
+            <div class="text-sm font-medium">${tx.from} → ${tx.to}</div>
+            <div class="text-xs text-gray-500">Amount: <span class="font-semibold">${tx.amount}</span></div>
+          </div>
+          <button class="px-2 py-1 rounded text-sm text-white bg-red-500 hover:bg-red-600" onclick="deletePending(${i})">🗑</button>
+        `;
+        txList.appendChild(li);
+      });
+    }
+
+    function renderBlocks() {
+      const blockList = document.getElementById('block-list');
+      blockList.innerHTML = '';
+      if (blockchain.length === 0) {
+        blockList.innerHTML = '<li class="text-gray-500">No blocks mined yet...</li>';
+        return;
+      }
+      for (let i = blockchain.length - 1; i >= 0; i--) {
+        const b = blockchain[i];
+        const li = document.createElement('li');
+        li.className = 'bg-[#fffaf2] border rounded-lg p-3 shadow-sm';
+        li.innerHTML = `
+          <div class="flex justify-between">
+            <div>
+              <div class="font-semibold">Block ${b.index}</div>
+              <div class="text-xs text-gray-500">${b.timestamp}</div>
+            </div>
+            <div class="text-xs">Nonce:${b.nonce}</div>
+          </div>
+          <div class="text-xs text-gray-600 mt-1">Prev: ${b.prevHash.substring(0,10)}...</div>
+          <div class="text-xs text-gray-600">Hash: ${b.hash.substring(0,16)}...</div>
+          <div class="mt-1 text-sm text-[#3a4a2a]">Tx: ${b.transactions.map(t=>`${t.from}→${t.to}:${t.amount}`).join(', ')}</div>
+        `;
+        blockList.appendChild(li);
+      }
+    }
+
+    function updateWallets() {
+      const wallets = {};
+      blockchain.forEach(b => b.transactions.forEach(t => {
+        wallets[t.from] = (wallets[t.from] || 0) - Number(t.amount);
+        wallets[t.to] = (wallets[t.to] || 0) + Number(t.amount);
+      }));
+      const ul = document.getElementById('wallets-list');
+      ul.innerHTML = '';
+      if (Object.keys(wallets).length === 0) {
+        ul.innerHTML = '<li class="text-gray-500">No wallets yet (mine some blocks).</li>';
+        return;
+      }
+
+      const colors = ['#e0f2f1', '#fce4ec', '#e3f2fd', '#fff3e0', '#f3e5f5', '#e8f5e9'];
+      let colorIndex = 0;
+
+      for (const [name, balance] of Object.entries(wallets)) {
+        const color = colors[colorIndex % colors.length];
+        colorIndex++;
+        const li = document.createElement('li');
+        li.className = 'flex justify-between items-center p-3 rounded-xl shadow-md border text-sm font-medium';
+        li.style.backgroundColor = color;
+        li.innerHTML = `<span>${name}</span><span class="font-semibold">${balance}</span>`;
+        ul.appendChild(li);
+      }
+    }
+
+    async function mineBlock() {
+      if (transactions.length === 0) return alert('Add at least one transaction!');
+      const prevHash = blockchain.length === 0 ? '0'.repeat(64) : blockchain[blockchain.length - 1].hash;
+      let nonce = 0, hash = '';
+      const data = () => JSON.stringify({ index: blockchain.length + 1, timestamp: new Date().toLocaleString(), transactions, prevHash, nonce });
+      const progressContainer = document.getElementById('progress-container');
+      const progressBar = document.getElementById('progress-bar');
+      progressContainer.classList.remove('hidden');
+      progressBar.style.width = '0%';
+      const msg = document.createElement('li');
+      msg.className = 'p-3 bg-[#e8f2df] rounded-lg text-[#315025] font-medium';
+      msg.textContent = 'Mining...';
+      document.getElementById('block-list').prepend(msg);
+      await new Promise(res => {
+        const total = 10000;
+        const interval = setInterval(() => {
+          nonce++;
+          hash = CryptoJS.SHA256(data()).toString();
+          progressBar.style.width = Math.min(100, (nonce / total) * 100) + '%';
+          msg.textContent = `Mining... Nonce:${nonce}`;
+          if (hash.startsWith('00')) {
+            clearInterval(interval);
+            progressBar.style.width = '100%';
+            setTimeout(() => {
+              progressContainer.classList.add('hidden');
+              msg.remove();
+              res();
+            }, 300);
+          }
+        }, 1);
+      });
+      blockchain.push({ index: blockchain.length + 1, timestamp: new Date().toLocaleString(), transactions: [...transactions], prevHash, nonce, hash });
+      transactions = [];
+      renderTransactions();
+      renderBlocks();
+      updateWallets();
+      saveState();
+    }
+
+    function downloadLedgerJSON() {
+      if (blockchain.length === 0) return alert('No blocks!');
+      const a = document.createElement('a');
+      a.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(blockchain, null, 2));
+      a.download = 'crypto_ledger.json';
+      a.click();
+    }
+
+    function downloadLedgerCSV() {
+      if (blockchain.length === 0) return alert('No blocks!');
+      let csv = 'Block,Timestamp,PrevHash,Nonce,Hash,Transactions\n';
+      blockchain.forEach(b => {
+        const txs = b.transactions.map(t => `${t.from}->${t.to}:${t.amount}`).join('|');
+        csv += `${b.index},"${b.timestamp}",${b.prevHash},${b.nonce},${b.hash},"${txs}"\n`;
+      });
+      const a = document.createElement('a');
+      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+      a.download = 'crypto_ledger.csv';
+      a.click();
+    }
+
+    function copyLedger() {
+      navigator.clipboard.writeText(JSON.stringify(blockchain, null, 2)).then(() => alert('Ledger copied!'));
+    }
+
+    function validateBlockchain() {
+      if (blockchain.length === 0) return alert('No blocks to validate.');
+      let valid = true;
+      for (let i = 1; i < blockchain.length; i++) {
+        if (blockchain[i].prevHash !== blockchain[i - 1].hash) valid = false;
+        const b = blockchain[i];
+        const recalc = CryptoJS.SHA256(JSON.stringify({
+          index: b.index,
+          timestamp: b.timestamp,
+          transactions: b.transactions,
+          prevHash: b.prevHash,
+          nonce: b.nonce
+        })).toString();
+        if (recalc !== b.hash) valid = false;
+      }
+      alert(valid ? 'Blockchain is valid' : ' Blockchain corrupted!');
+    }
+
+    document.getElementById('theme-toggle').onclick = () => {
+      document.getElementById('body').classList.toggle('bg-[#11120f]');
+      document.querySelectorAll('section,aside,header').forEach(e => e.classList.toggle('text-white'));
+    };
+
+    const toolsPanel = document.getElementById('tools-panel');
+    function toggleTools() {
+      toolsPanel.classList.toggle('translate-x-full');
+    }
+    document.getElementById('tools-toggle').onclick = toggleTools;
+
+    renderTransactions();
+    renderBlocks();
+    updateWallets();
+  </script>
+</body>
+</html>
